@@ -1,19 +1,23 @@
 #include <math.h>
 #include <stdlib.h>
-#include <sndfile.h>
 #include "lv2.h"
+#include "log.h"
 
 #define PLUGIN_URI "http://brnv.lv2/plugins/ir-cab-sim"
 
 typedef enum {
     INPUT = 0,
-    OUTPUT = 1
+    OUTPUT = 1,
+    FILE_SIZE = 99,
+    FILE_DATA = 100
 } PortIndex;
 
 typedef struct {
     const float *input;
     float *output;
     float *impulseResponse;
+    float * buffer ;
+    int buffer_size ;
 } IRCabSim;
 
 static LV2_Handle instantiate(
@@ -41,40 +45,19 @@ static void connect_port(
         case OUTPUT:
             irCabSim->output = (float*)data;
             break;
+        case FILE_SIZE:
+            irCabSim->buffer_size = * (int *) data ;
+            break ;
+        case FILE_DATA:
+            for (int i = 0 ; i < irCabSim->buffer_size ; i ++)
+                irCabSim->buffer [i] = ((float *) data) [i] ;
+            irCabSim->impulseResponse = irCabSim->buffer ;
+            break ;
     }
 }
 
 static void activate(LV2_Handle instance) {
-    SF_INFO sndInfo;
-    SNDFILE *sndFile = sf_open(
-        "/home/brnv/Downloads/catharsis-awesometime-fredman/s-preshigh.wav",
-        SFM_READ, &sndInfo
-    );
-    int channelsCount = sndInfo.channels;
-
-    int bufferSize = 128;
-    float buffer[bufferSize * channelsCount];
-
     IRCabSim *irCabSim = (IRCabSim*) instance;
-    irCabSim->impulseResponse = (float*) malloc(
-        sndInfo.frames * channelsCount * sizeof(float)
-    );
-
-    int length = sndInfo.frames;
-    int offset = 0;
-
-    while (length) {
-        int n = (length > bufferSize) ? bufferSize : length;
-
-        n = sf_readf_float(sndFile, buffer, n);
-
-        for (int i = 0; i < n * channelsCount; i++) {
-            irCabSim->impulseResponse[offset + i] = buffer[i];
-        }
-
-        offset += n * channelsCount;
-        length -= n;
-    }
 }
 
 static void run(LV2_Handle instance, uint32_t n_samples) {
