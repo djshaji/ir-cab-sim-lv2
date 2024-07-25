@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include "lv2.h"
 #include "log.h"
+#include <stdio.h>
+#include <string.h>
 
 #define PLUGIN_URI "http://brnv.lv2/plugins/ir-cab-sim#ir-cab-sim"
 #define MAX_BUFFER_SIZE 1024 * 1024
@@ -38,6 +40,7 @@ static void connect_port(
     void *data
 ) {
     IRCabSim *irCabSim = (IRCabSim*)instance;
+    float * d = (float *) data ;
 
     switch ((PortIndex)port) {
         case INPUT:
@@ -48,18 +51,26 @@ static void connect_port(
             break;
         case FILE_SIZE:
             irCabSim->buffer_size = * (int *) data ;
+            irCabSim->buffer_size = irCabSim -> buffer_size * sizeof (float);
             if (irCabSim->buffer_size > MAX_BUFFER_SIZE)
                 irCabSim->buffer_size = MAX_BUFFER_SIZE;
             
             if (irCabSim->buffer != NULL)
                 free (irCabSim->buffer);
                 
-            irCabSim->buffer = (float *) malloc (irCabSim->buffer_size);
+            printf ("Allocating %d bytes of memory: %d\n", irCabSim->buffer_size);
+            irCabSim->buffer = (float *) malloc (irCabSim->buffer_size * sizeof (float));
             break ;
         case FILE_DATA:
-            for (int i = 0 ; i < irCabSim->buffer_size ; i ++)
-                irCabSim->buffer [i] = ((float *) data) [i] ;
+            printf ("COPYING data: %d bytes\n", irCabSim->buffer_size);
+            memcpy (irCabSim->buffer, data, irCabSim->buffer_size);
+            for (int i = 0 ; i < irCabSim->buffer_size ; i ++) {
+                //~ LOGD ("[%d : %d]\n", i, irCabSim->buffer_size);
+                irCabSim->buffer [i] =  d [i] ;
+            }
+            
             irCabSim->impulseResponse = irCabSim->buffer ;
+            printf ("copy ok\n");
             break ;
     }
 }
@@ -85,7 +96,7 @@ static void run(LV2_Handle instance, uint32_t n_samples) {
     {
         resultSample = 0;
 
-        for (int m = 0; m < sizeof(impulseResponse); m++)
+        for (int m = 0; m < irCabSim->buffer_size; m++)
         {
             j = n - m;
             if (j < 0)
